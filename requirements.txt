@@ -1,0 +1,19 @@
+# Núcleo de dados / ML
+numpy
+pandas
+scikit-learn
+scipy
+
+# Visualização
+matplotlib
+seaborn
+
+# Acesso ao dataset da UCI
+ucimlrepo
+
+# Ambiente de notebooks
+jupyter
+ipykernel
+
+# Higiene de notebooks (evita merge conflicts ao limpar saídas das células)
+nbstripout
