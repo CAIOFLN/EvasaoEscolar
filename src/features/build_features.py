@@ -1,18 +1,24 @@
 """Engenharia e seleção de atributos.
 
-Decisões guiadas pela análise exploratória (notebooks/01_eda.ipynb):
+Decisões validadas por validação cruzada (5-fold, F1 macro), não só pela EDA:
 
-- REMOÇÃO: variáveis com correlação ~0 com o alvo (macroeconômicas e algumas
-  demográficas) — pouco valor preditivo e ruído potencial.
-- CRIAÇÃO: features derivadas do desempenho acadêmico, que foi o bloco mais
-  discriminante (taxas de aprovação, agregados e evolução das notas).
+- CRIAÇÃO: o ganho real vem de **razões** (ex.: aprovados/matriculados). Árvores
+  de decisão não conseguem derivar divisões internamente, então essas features
+  agregam informação. Já somas e diferenças (totais, reprovações = matriculados −
+  aprovados) o XGBoost reconstrói sozinho — testadas, foram redundantes/ruído e
+  pioraram o modelo, por isso não entram.
+- SELEÇÃO: as variáveis macroeconômicas/demográficas têm correlação linear ~0
+  com o alvo, mas removê-las PIOROU o F1 na CV (o XGBoost extrai sinal não-linear
+  delas). Por isso o padrão é NÃO descartar (drop=False). A lista abaixo fica
+  documentada para experimentação.
 - NOMINAIS: categorias codificadas como inteiros são marcadas como `category`
   para que o XGBoost as trate de forma nativa (e não como números ordenados).
 """
 import numpy as np
 import pandas as pd
 
-# Variáveis descartadas (correlação ~0 com o alvo na EDA)
+# Correlação linear ~0 com o alvo (EDA), MAS removê-las piora o modelo na CV.
+# Mantidas por padrão; lista preservada apenas para experimentação (drop=True).
 DROP_FEATURES = [
     "Nacionality",
     "International",
@@ -22,12 +28,16 @@ DROP_FEATURES = [
     "GDP",
 ]
 
-# Categorias nominais (sem ordem) codificadas como inteiros
+# Categorias nominais (sem ordem) codificadas como inteiros. Marcadas como
+# `category` para o XGBoost não assumir ordem entre os códigos.
+# Binárias (0/1) ficam de fora de propósito: para 2 valores, corte numérico
+# e categórico são equivalentes.
 NOMINAL_FEATURES = [
     "Marital Status",
     "Application mode",
     "Course",
     "Previous qualification",
+    "Nacionality",
     "Mother's qualification",
     "Father's qualification",
     "Mother's occupation",
@@ -35,39 +45,38 @@ NOMINAL_FEATURES = [
 ]
 
 
+def _safe_ratio(num, den):
+    """Razão elemento a elemento, retornando 0 onde o denominador é 0."""
+    return np.where(den > 0, num / den, 0.0)
+
+
 def engineer(df: pd.DataFrame) -> pd.DataFrame:
-    """Adiciona atributos derivados do desempenho acadêmico."""
+    """Adiciona as razões de aprovação que comprovadamente melhoram o modelo.
+
+    Apenas duas features, selecionadas por ablação com validação cruzada:
+    - overall_approval_rate: aprovados / matriculados nos dois semestres juntos.
+    - approval_rate_2nd: aprovados / matriculados no 2º semestre (o mais
+      discriminante na EDA).
+
+    Versões com mais razões, agregados, reprovações, engajamento e trajetória
+    foram testadas e não melhoraram (ver histórico/docstring do módulo).
+    """
     df = df.copy()
 
     e1 = df["Curricular units 1st sem (enrolled)"]
     a1 = df["Curricular units 1st sem (approved)"]
     e2 = df["Curricular units 2nd sem (enrolled)"]
     a2 = df["Curricular units 2nd sem (approved)"]
-    g1 = df["Curricular units 1st sem (grade)"]
-    g2 = df["Curricular units 2nd sem (grade)"]
 
-    # Taxas de aprovação (0 quando não houve matrícula em disciplinas)
-    df["approval_rate_1st"] = np.where(e1 > 0, a1 / e1, 0.0)
-    df["approval_rate_2nd"] = np.where(e2 > 0, a2 / e2, 0.0)
-
-    # Agregados dos dois semestres
-    df["total_approved"] = a1 + a2
-    df["total_enrolled"] = e1 + e2
-    df["overall_approval_rate"] = np.where(
-        df["total_enrolled"] > 0, df["total_approved"] / df["total_enrolled"], 0.0
-    )
-
-    # Notas: média e evolução entre semestres
-    df["avg_grade"] = (g1 + g2) / 2
-    df["grade_trend"] = g2 - g1
+    df["approval_rate_2nd"] = _safe_ratio(a2, e2)
+    df["overall_approval_rate"] = _safe_ratio(a1 + a2, e1 + e2)
 
     return df
 
 
 def prepare(
     df: pd.DataFrame,
-    target: str = "Target",
-    drop: bool = True,
+    drop: bool = False,
     add_features: bool = True,
 ) -> pd.DataFrame:
     """Aplica seleção + engenharia de atributos e tipa as nominais.

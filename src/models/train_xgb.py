@@ -48,8 +48,9 @@ def _base_estimator(n_jobs: int = -1) -> XGBClassifier:
 
 
 def build_model() -> XGBClassifier:
+    # Melhores hiperparâmetros encontrados pelo GridSearchCV (--tune), F1 macro.
     model = _base_estimator()
-    model.set_params(n_estimators=400, learning_rate=0.05, max_depth=5, subsample=0.9)
+    model.set_params(n_estimators=300, learning_rate=0.05, max_depth=4, subsample=0.8)
     return model
 
 
@@ -120,8 +121,8 @@ def main() -> None:
                         label="ORIGINAL (sem add/remove)", verbose=False)
     print({"ORIGINAL": {k: round(v, 4) for k, v in base.items()}})
 
-    label = "COM engenharia + seleção" + (" + GridSearch" if args.tune else "")
-    model, X, le, eng = run(add_features=True, drop=True, label=label, tune=args.tune,
+    label = "COM razões de aprovação" + (" + GridSearch" if args.tune else "")
+    model, X, le, eng = run(add_features=True, drop=False, label=label, tune=args.tune,
                             verbose=True)
     print({"ENGENHARIA": {k: round(v, 4) for k, v in eng.items()}})
 
