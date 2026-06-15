@@ -1,60 +1,60 @@
-"""Treino de um classificador XGBoost para previsão de evasão escolar.
+"""Treino de um classificador LightGBM para previsão de evasão escolar.
 
 Aplica a seleção/engenharia de atributos de src.features.build_features e
-trata as variáveis nominais nativamente (enable_categorical).
+trata as variáveis nominais nativamente (colunas `category` são detectadas
+automaticamente pelo LightGBM).
 
 Uso:
-    python -m src.models.train_xgb           # treino padrão (hiperparâmetros fixos)
-    python -m src.models.train_xgb --tune    # otimiza hiperparâmetros via GridSearchCV
+    python -m src.models.train_lgbm           # treino padrão (hiperparâmetros fixos)
+    python -m src.models.train_lgbm --tune    # otimiza hiperparâmetros via GridSearchCV
 """
 import argparse
 
 import joblib
 import numpy as np
+from lightgbm import LGBMClassifier
 from sklearn.metrics import confusion_matrix
 from sklearn.model_selection import GridSearchCV, StratifiedKFold, train_test_split
 from sklearn.preprocessing import LabelEncoder
-from xgboost import XGBClassifier
 
 from src.data.load import RAW_CSV, TARGET, load_raw
 from src.features.build_features import prepare
 from src.models.evaluate import evaluate, report
 
 PROJECT_ROOT = RAW_CSV.resolve().parents[2]
-MODEL_PATH = PROJECT_ROOT / "models" / "xgboost.joblib"
+MODEL_PATH = PROJECT_ROOT / "models" / "lightgbm.joblib"
 RANDOM_STATE = 42
 
-# Grade de hiperparâmetros para o GridSearchCV (36 combinações x 5 folds)
+# Grade de hiperparâmetros para o GridSearchCV (54 combinações x 5 folds)
 PARAM_GRID = {
-    "max_depth": [4, 5, 6],
+    "num_leaves": [15, 31, 63],
     "learning_rate": [0.03, 0.05, 0.1],
     "n_estimators": [300, 500],
     "subsample": [0.8, 1.0],
 }
 
 
-def _base_estimator(n_jobs: int = -1) -> XGBClassifier:
+def _base_estimator(n_jobs: int = -1) -> LGBMClassifier:
     """Configuração comum (sem os hiperparâmetros que o grid search varia)."""
-    return XGBClassifier(
+    return LGBMClassifier(
         colsample_bytree=0.8,
         reg_lambda=1.0,
-        objective="multi:softprob",
-        eval_metric="mlogloss",
-        enable_categorical=True,   # trata colunas 'category' nativamente
-        tree_method="hist",
+        subsample_freq=1,          # necessário p/ o subsample (bagging) ter efeito
+        objective="multiclass",
         random_state=RANDOM_STATE,
         n_jobs=n_jobs,
+        verbose=-1,
     )
 
 
-def build_model() -> XGBClassifier:
+def build_model() -> LGBMClassifier:
     # Melhores hiperparâmetros encontrados pelo GridSearchCV (--tune), F1 macro.
     model = _base_estimator()
-    model.set_params(n_estimators=300, learning_rate=0.05, max_depth=4, subsample=0.8)
+    model.set_params(n_estimators=300, learning_rate=0.05, num_leaves=31, subsample=0.8)
     return model
 
 
-def tune_model(X_train, y_train, verbose: bool = True) -> XGBClassifier:
+def tune_model(X_train, y_train, verbose: bool = True) -> LGBMClassifier:
     """Otimiza hiperparâmetros com GridSearchCV (CV estratificada, F1 macro)."""
     cv = StratifiedKFold(n_splits=5, shuffle=True, random_state=RANDOM_STATE)
     # n_jobs=1 no estimador para o paralelismo ficar a cargo do GridSearchCV
@@ -109,7 +109,7 @@ def run(add_features: bool, label: str, verbose: bool = True, tune: bool = False
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(description="Treino XGBoost p/ evasão escolar.")
+    parser = argparse.ArgumentParser(description="Treino LightGBM p/ evasão escolar.")
     parser.add_argument("--tune", action="store_true",
                         help="otimiza hiperparâmetros com GridSearchCV")
     args = parser.parse_args()
@@ -117,7 +117,7 @@ def main() -> None:
     # Comparação: dados originais vs. com as razões de aprovação criadas
     print("Comparando o efeito da engenharia de atributos...")
     _, _, _, base = run(add_features=False, label="ORIGINAL (sem features novas)",
-                        verbose=True)
+                        verbose=False)
     print({"ORIGINAL": {k: round(v, 4) for k, v in base.items()}})
 
     label = "COM razões de aprovação" + (" + GridSearch" if args.tune else "")
@@ -125,8 +125,9 @@ def main() -> None:
     print({"ENGENHARIA": {k: round(v, 4) for k, v in eng.items()}})
 
     # Importância das features (ganho)
-    importances = model.get_booster().get_score(importance_type="gain")
-    importances = sorted(importances.items(), key=lambda kv: kv[1], reverse=True)
+    gains = model.booster_.feature_importance(importance_type="gain")
+    importances = sorted(zip(model.booster_.feature_name(), gains),
+                         key=lambda kv: kv[1], reverse=True)
     print("\nTop 15 features por importância (gain):")
     for name, val in importances[:15]:
         print(f"  {name:45s} {val:8.2f}")

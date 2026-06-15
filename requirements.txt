@@ -4,6 +4,7 @@ pandas
 scikit-learn
 scipy
 xgboost
+lightgbm
 
 # Visualização
 matplotlib
