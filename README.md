@@ -25,12 +25,16 @@ EvasaoEscolar/
 │   ├── raw/                 # dataset original baixado da UCI (não versionado)
 │   └── processed/           # dados após limpeza/transformação (não versionado)
 ├── notebooks/               # exploração e experimentos interativos
-│   └── 01_eda.ipynb         # análise exploratória dos dados
+│   ├── 01_eda.ipynb         # análise exploratória dos dados
+│   └── 02_comparacao_modelos.ipynb  # avaliação/comparação dos modelos treinados
 ├── src/                     # código-fonte reutilizável (importável como pacote)
 │   ├── data/load.py         # leitura do CSV e split treino/teste estratificado
-│   ├── features/            # engenharia de atributos
+│   ├── features/build_features.py   # engenharia de atributos
 │   ├── models/
-│   │   ├── train.py         # treino do modelo e exportação para .joblib
+│   │   ├── train_xgb.py     # treino do XGBoost
+│   │   ├── train_lgbm.py    # treino do LightGBM
+│   │   ├── train_knn.py     # treino do KNN (com/sem PCA via GridSearchCV)
+│   │   ├── persistence.py   # salvar/recarregar modelos (.joblib)
 │   │   └── evaluate.py      # métricas (acurácia, precisão, recall, F1)
 │   └── visualization/       # funções de plotagem
 ├── scripts/
@@ -51,7 +55,7 @@ EvasaoEscolar/
   funções (`from src.data.load import ...`) em vez de duplicar código nas
   células — o que mantém os notebooks enxutos e os experimentos reproduzíveis.
 - **`notebooks/` é para exploração**, com nomes no padrão `NN_descricao.ipynb`
-  (ex.: `01_eda.ipynb`, `02_modelagem.ipynb`).
+  (ex.: `01_eda.ipynb`, `02_comparacao_modelos.ipynb`).
 
 ## Setup
 
@@ -71,18 +75,38 @@ python scripts/download_data.py
 
 ## Uso
 
-```bash
-# Treinar o baseline e ver as métricas (acurácia, precisão, recall, F1)
-python -m src.models.train
+### 1. Treinar os modelos
 
-# Abrir a análise exploratória
-jupyter notebook notebooks/01_eda.ipynb
+Cada script treina um classificador, imprime as métricas no conjunto de teste
+(acurácia, precisão, recall e F1 macro) e salva o modelo em `models/*.joblib`.
+Rode a partir da raiz do projeto:
+
+```bash
+python -m src.models.train_xgb      # XGBoost   -> models/xgboost.joblib
+python -m src.models.train_lgbm     # LightGBM  -> models/lightgbm.joblib
+python -m src.models.train_knn      # KNN       -> models/knn.joblib
 ```
 
-## Trabalho em dupla (Git)
+Adicione a flag `--tune` para otimizar os hiperparâmetros via `GridSearchCV`
+(validação cruzada estratificada de 5 folds, otimizando F1 macro). Sem a flag,
+XGBoost e LightGBM usam os melhores hiperparâmetros já encontrados; o KNN sempre
+faz uma busca interna (com/sem PCA):
 
-- As saídas das células dos notebooks são removidas automaticamente no commit
-  pelo `nbstripout` — basta rodar `nbstripout --install` após clonar. Isso evita
-  os conflitos de merge causados por `outputs` e metadados de execução.
-- Mantenha lógica reutilizável em `src/` e importe-a nos notebooks.
-- Prefira trabalhar em notebooks/arquivos diferentes para reduzir conflitos.
+```bash
+python -m src.models.train_xgb --tune
+```
+
+### 2. Avaliar e comparar os modelos
+
+O notebook **`notebooks/02_comparacao_modelos.ipynb`** carrega os modelos salvos
+em `models/`, avalia os três no mesmo conjunto de teste e gera a tabela de
+métricas, as matrizes de confusão e a importância das features:
+
+```bash
+jupyter notebook notebooks/02_comparacao_modelos.ipynb
+```
+
+> Treine os modelos (passo 1) antes de rodar o notebook — ele lê os `.joblib`
+> de `models/` e avisa caso algum ainda não exista.
+
+A análise exploratória dos dados está em `notebooks/01_eda.ipynb`.

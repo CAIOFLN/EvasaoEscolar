@@ -10,7 +10,6 @@ Uso:
 """
 import argparse
 
-import joblib
 import numpy as np
 from lightgbm import LGBMClassifier
 from sklearn.metrics import confusion_matrix
@@ -20,6 +19,7 @@ from sklearn.preprocessing import LabelEncoder
 from src.data.load import RAW_CSV, TARGET, load_raw
 from src.features.build_features import prepare
 from src.models.evaluate import evaluate, report
+from src.models.persistence import save_model
 
 PROJECT_ROOT = RAW_CSV.resolve().parents[2]
 MODEL_PATH = PROJECT_ROOT / "models" / "lightgbm.joblib"
@@ -105,7 +105,7 @@ def run(add_features: bool, label: str, verbose: bool = True, tune: bool = False
         print("Matriz de confusão (linhas=real, colunas=previsto):")
         print("classes:", list(nomes))
         print(confusion_matrix(y_test, y_pred))
-    return model, X, le, metrics
+    return model, X, le, metrics, y_test, y_pred
 
 
 def main() -> None:
@@ -114,14 +114,8 @@ def main() -> None:
                         help="otimiza hiperparâmetros com GridSearchCV")
     args = parser.parse_args()
 
-    # Comparação: dados originais vs. com as razões de aprovação criadas
-    print("Comparando o efeito da engenharia de atributos...")
-    _, _, _, base = run(add_features=False, label="ORIGINAL (sem features novas)",
-                        verbose=False)
-    print({"ORIGINAL": {k: round(v, 4) for k, v in base.items()}})
-
     label = "COM razões de aprovação" + (" + GridSearch" if args.tune else "")
-    model, X, le, eng = run(add_features=True, label=label, tune=args.tune, verbose=True)
+    model, X, le, eng, _, _ = run(add_features=True, label=label, tune=args.tune, verbose=True)
     print({"ENGENHARIA": {k: round(v, 4) for k, v in eng.items()}})
 
     # Importância das features (ganho)
@@ -132,8 +126,7 @@ def main() -> None:
     for name, val in importances[:15]:
         print(f"  {name:45s} {val:8.2f}")
 
-    MODEL_PATH.parent.mkdir(parents=True, exist_ok=True)
-    joblib.dump({"model": model, "label_encoder": le, "features": list(X.columns)}, MODEL_PATH)
+    save_model(model, le, X.columns, MODEL_PATH)
     print(f"\nModelo salvo em {MODEL_PATH}")
 
 
