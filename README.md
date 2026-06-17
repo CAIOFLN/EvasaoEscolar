@@ -118,4 +118,4 @@ jupyter notebook notebooks/02_comparacao_modelos.ipynb
 > Treine os modelos (passo 1) antes de rodar o notebook — ele lê os `.joblib`
 > de `models/` e avisa caso algum ainda não exista.
 
-A análise exploratória dos dados está em `notebooks/01_eda.ipynb`.
+A análise exploratória dos dados está em `notebooks/01_eda.ipynb`. a
