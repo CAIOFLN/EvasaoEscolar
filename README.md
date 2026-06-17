@@ -2,6 +2,18 @@
 
 Trabalho 2 (SCC0630 — Inteligência Artificial).
 
+## Integrantes do grupo
+
+| Nome                                              | Nº USP    |
+| ------------------------------------------------- | --------- |
+| Caio Florentin de Oliveira                        | 14562921  |
+| Enrico Martim Zúcollo                             | 14568048  |
+| Guilherme Sonego                                  | 14576489  |
+| Henrique Pastore                                  | 9878635   |
+| Murilo Gonzales Vieira                            | 15578973  |
+| Pedro Arthur Domingos Estanagel Soares Sanches    | 5015792   |
+| Rodrigo Akira Azevedo Kurosawa                    | 14606321  |
+
 Este projeto treina um classificador para prever o desfecho acadêmico de
 estudantes do ensino superior em uma de **três classes**:
 
@@ -40,22 +52,21 @@ EvasaoEscolar/
 ├── scripts/
 │   └── download_data.py     # baixa o dataset da UCI (id=697)
 ├── models/                  # modelos treinados (.joblib) — não versionado
-├── reports/figures/         # figuras geradas — não versionado
-├── requirements.txt         # dependências do projeto
-└── CLAUDE.md                # contexto/instruções do projeto
+└── requirements.txt         # dependências do projeto
 ```
 
 **Por que essa organização?**
 
-- **`data/`, `models/` e `reports/figures/` não vão para o Git** (ver
-  `.gitignore`). Arquivos grandes e binários ficam fora do versionamento; cada
-  integrante os gera localmente. As pastas são mantidas no repositório por
-  arquivos `.gitkeep`.
-- **`src/` concentra a lógica reutilizável.** Os notebooks importam dessas
+- **`data/` e `models/` não vão para o Git**
+  Arquivos grandes e binários ficam fora do versionamento; cada
+  integrante os gera localmente.
+
+- **`src/` concentra o processamento** Os notebooks importam dessas
   funções (`from src.data.load import ...`) em vez de duplicar código nas
-  células — o que mantém os notebooks enxutos e os experimentos reproduzíveis.
-- **`notebooks/` é para exploração**, com nomes no padrão `NN_descricao.ipynb`
-  (ex.: `01_eda.ipynb`, `02_comparacao_modelos.ipynb`).
+  células. Nessa parte também estão os scripts de treino, que podem ser rodados via CLI.
+
+- **`notebooks/` é para exploração** e análise interativa, não para código de produção. O nome dos arquivos segue a ordem de execução sugerida
+(ex.: `01_eda.ipynb`, `02_comparacao_modelos.ipynb`).
 
 ## Setup
 
@@ -88,9 +99,7 @@ python -m src.models.train_knn      # KNN       -> models/knn.joblib
 ```
 
 Adicione a flag `--tune` para otimizar os hiperparâmetros via `GridSearchCV`
-(validação cruzada estratificada de 5 folds, otimizando F1 macro). Sem a flag,
-XGBoost e LightGBM usam os melhores hiperparâmetros já encontrados; o KNN sempre
-faz uma busca interna (com/sem PCA):
+(validação cruzada estratificada de 5 folds, otimizando F1 macro). 
 
 ```bash
 python -m src.models.train_xgb --tune
